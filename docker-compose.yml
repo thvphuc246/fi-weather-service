@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: weather
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    configs:
+      - source: test_db
+        target: /docker-entrypoint-initdb.d/test_db.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      retries: 15
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/weather
+      CRON_SECRET: ${CRON_SECRET:-dev-secret}
+      RUN_SCHEDULER: "1"
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+
+configs:
+  test_db:
+    content: "CREATE DATABASE weather_test;"
+
+volumes:
+  pgdata:

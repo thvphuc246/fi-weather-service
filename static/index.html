@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finnish Weather</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --grid: #e6e5e1;
+    --observed: #2a78d6;
+    --forecast: #eb6834;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --grid: #2e2e2c;
+      --observed: #3987e5;
+      --forecast: #d95926;
+    }
+  }
+  body { margin: 0; background: var(--surface); color: var(--text-primary); font: 15px/1.4 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.4rem; margin: 0 0 12px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  select, button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--grid); background: var(--surface); color: var(--text-primary); cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--text-primary); font-weight: 600; }
+  .status { color: var(--text-secondary); font-size: 0.9rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 24px; }
+  figure { margin: 0; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  .chart { position: relative; height: 240px; }
+  table { border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 4px 16px 4px 0; border-bottom: 1px solid var(--grid); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  details { margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Finnish Weather</h1>
+  <div class="controls">
+    <label>Place <select id="place"></select></label>
+    <span role="group" aria-label="Time range">
+      <button data-hours="24" aria-pressed="true">24 h</button>
+      <button data-hours="168" aria-pressed="false">7 days</button>
+      <button data-hours="720" aria-pressed="false">30 days</button>
+    </span>
+    <span class="status" id="status"></span>
+  </div>
+  <div class="grid" id="charts"></div>
+  <details>
+    <summary>Latest values (table)</summary>
+    <table id="table"></table>
+  </details>
+  <p class="status">Data: <a href="https://en.ilmatieteenlaitos.fi/open-data">Finnish Meteorological Institute open data</a> (CC BY 4.0). Solid line = observed, dashed = forecast.</p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const PARAMS = [
+  { key: "temperature", label: "Temperature", unit: "°C" },
+  { key: "wind_speed", label: "Wind speed", unit: "m/s" },
+  { key: "humidity", label: "Humidity", unit: "%" },
+  { key: "precipitation", label: "Precipitation", unit: "mm/h", bar: true },
+  { key: "pressure", label: "Pressure", unit: "hPa" },
+];
+const TZ = "Europe/Helsinki";
+const fmtTick = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const fmtTip = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+const state = { place: "Helsinki", hours: 24 };
+const charts = {};
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function chartFor(p) {
+  if (charts[p.key]) return charts[p.key];
+  const fig = document.createElement("figure");
+  fig.innerHTML = `<figcaption>${p.label} (${p.unit})</figcaption><div class="chart"><canvas role="img" aria-label="${p.label} chart"></canvas></div>`;
+  $("charts").append(fig);
+  const type = p.bar ? "bar" : "line";
+  const dataset = (label, color, dash) => ({
+    type, label, data: [], borderColor: color, backgroundColor: color,
+    borderWidth: 2, borderDash: dash, pointRadius: 0, pointHoverRadius: 4,
+    borderRadius: p.bar ? 4 : 0, barPercentage: 1, categoryPercentage: 1,
+  });
+  charts[p.key] = new Chart(fig.querySelector("canvas"), {
+    data: { datasets: [dataset("Observed", css("--observed"), []), dataset("Forecast", css("--forecast"), [6, 4])] },
+    options: {
+      maintainAspectRatio: false, animation: false, parsing: false,
+      interaction: { mode: "nearest", axis: "x", intersect: false },
+      scales: {
+        x: { type: "linear", ticks: { color: css("--text-secondary"), maxTicksLimit: 6, callback: (v) => fmtTick.format(v) }, grid: { color: css("--grid") } },
+        y: { beginAtZero: !!p.bar, ticks: { color: css("--text-secondary") }, grid: { color: css("--grid") } },
+      },
+      plugins: {
+        legend: { labels: { color: css("--text-primary"), boxHeight: 2 } },
+        tooltip: { callbacks: {
+          title: (items) => fmtTip.format(items[0].parsed.x),
+          label: (item) => `${item.dataset.label}: ${item.parsed.y} ${p.unit}`,
+        } },
+      },
+    },
+  });
+  return charts[p.key];
+}
+
+const toXY = (rows) => (rows || []).map(([x, y]) => ({ x, y }));
+
+async function load() {
+  $("status").textContent = "Loading…";
+  try {
+    const res = await fetch(`/api/series?place=${encodeURIComponent(state.place)}&hours=${state.hours}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const rows = [];
+    for (const p of PARAMS) {
+      const chart = chartFor(p);
+      const obs = toXY(data.observation[p.key]);
+      const fc = toXY(data.forecast[p.key]);
+      chart.data.datasets[0].data = obs;
+      chart.data.datasets[1].data = fc;
+      chart.update();
+      rows.push(`<tr><td>${p.label}</td><td class="num">${obs.at(-1)?.y ?? "–"} ${p.unit}</td><td class="num">${fc[0]?.y ?? "–"} ${p.unit}</td></tr>`);
+    }
+    $("table").innerHTML = `<tr><th>Measurement</th><th>Latest observed</th><th>Next forecast</th></tr>${rows.join("")}`;
+    $("status").textContent = "";
+  } catch (e) {
+    $("status").textContent = `Could not load data (${e.message}).`;
+  }
+}
+
+async function init() {
+  const places = await (await fetch("/api/places")).json();
+  $("place").innerHTML = places.map((p) => `<option>${p}</option>`).join("");
+  $("place").onchange = (e) => { state.place = e.target.value; load(); };
+  document.querySelectorAll("[data-hours]").forEach((b) => b.onclick = () => {
+    state.hours = Number(b.dataset.hours);
+    document.querySelectorAll("[data-hours]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+    load();
+  });
+  load();
+}
+init();
+</script>
+</body>
+</html>

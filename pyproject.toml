@@ -1,0 +1,25 @@
+[project]
+name = "finnish-weather-data-service"
+version = "0.1.0"
+description = "Pulls FMI open weather data on a schedule, stores it in Postgres, charts it."
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "psycopg[binary]>=3.2",
+    "uvicorn>=0.32",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "mypy>=1.13",
+    "pytest>=8.3",
+]
+
+[tool.mypy]
+strict = true
+files = ["app.py", "weather", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
