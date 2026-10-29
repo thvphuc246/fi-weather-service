@@ -1,5 +1,3 @@
-"""Runs against a real Postgres. Uses TEST_DATABASE_URL (never DATABASE_URL) because it wipes tables."""
-
 import os
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -19,7 +17,6 @@ AUTH = {"Authorization": "Bearer test-secret"}
 
 @pytest.fixture
 def starts(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[datetime]]:
-    """Fresh DB, FMI replaced by fixtures; yields the obs start times requested."""
     monkeypatch.setenv("DATABASE_URL", TEST_DB or "")
     monkeypatch.setenv("CRON_SECRET", "test-secret")
     with db.connect() as conn:
@@ -65,13 +62,12 @@ def test_fetch_is_idempotent(starts: list[datetime]) -> None:
 def test_fetch_backfills_then_resumes_from_last(starts: list[datetime]) -> None:
     job.run_fetch()
     assert abs(starts[0] - (datetime.now(UTC) - job.BACKFILL)) < timedelta(minutes=1)
-    # newer than anything in the fixture, so it must become the resume point
     recent = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=1)
     with db.connect() as conn:
         db.upsert(conn, "observation", "Helsinki", [fmi.Reading(recent, "temperature", 1.0)])
     starts.clear()
     job.run_fetch()
-    assert starts[0] == recent  # Helsinki comes first in PLACES
+    assert starts[0] == recent
 
 
 def test_one_failing_place_does_not_stop_others(starts: list[datetime], monkeypatch: pytest.MonkeyPatch) -> None:

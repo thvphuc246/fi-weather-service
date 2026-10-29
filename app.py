@@ -1,5 +1,3 @@
-"""FastAPI app: chart page, series API, and the cron-triggered fetch. Vercel loads `app`."""
-
 import hmac
 import logging
 import os
@@ -34,7 +32,6 @@ def _scheduler() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    # Local Docker only. On Vercel, GitHub Actions calls /api/fetch instead.
     if os.environ.get("RUN_SCHEDULER") == "1":
         threading.Thread(target=_scheduler, daemon=True).start()
     yield
