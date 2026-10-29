@@ -1,18 +1,15 @@
-"""The scheduled fetch: shared by the local thread, /api/fetch and the CLI."""
-
 import logging
 from datetime import UTC, datetime, timedelta
 
 from weather import db, fmi
 
 PLACES = ("Helsinki", "Espoo", "Vantaa", "Turku", "Tampere", "Oulu")
-BACKFILL = timedelta(days=7)  # also FMI's 168 h per-request limit
+BACKFILL = timedelta(days=7)
 
 log = logging.getLogger(__name__)
 
 
 def run_fetch() -> dict[str, str]:
-    """Fetch every place; one failing place is logged and skipped, the next run fills the gap."""
     results = {}
     with db.connect() as conn:
         db.init_schema(conn)

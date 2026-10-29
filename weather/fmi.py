@@ -1,5 +1,3 @@
-"""Fetch and parse FMI open data (WFS "simple" stored queries)."""
-
 import math
 import urllib.parse
 import urllib.request
@@ -12,7 +10,6 @@ OBSERVATIONS = "fmi::observations::weather::simple"
 FORECAST = "fmi::forecast::edited::weather::scandinavia::point::simple"
 FORECAST_AHEAD = timedelta(days=10)
 
-# FMI parameter name -> our parameter key
 OBSERVATION_PARAMS = {
     "t2m": "temperature",
     "ws_10min": "wind_speed",
@@ -38,7 +35,6 @@ class Reading(NamedTuple):
 
 
 def parse(xml: bytes, names: dict[str, str]) -> list[Reading]:
-    """Turn a BsWfs FeatureCollection into readings, skipping NaN values."""
     readings = []
     for el in ET.fromstring(xml).iterfind(".//BsWfs:BsWfsElement", NS):
         name = el.findtext("BsWfs:ParameterName", namespaces=NS)
@@ -71,7 +67,6 @@ def _get(query: str, place: str, params: dict[str, str], **times: datetime) -> b
 
 
 def fetch_observations(place: str, start: datetime) -> list[Reading]:
-    """Observations from `start` until now. FMI caps one request at 168 hours."""
     return parse(_get(OBSERVATIONS, place, OBSERVATION_PARAMS, starttime=start), OBSERVATION_PARAMS)
 
 

@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS observation (
     PRIMARY KEY (place, ts, param)
 );
 
--- Latest forecast only: each fetch overwrites the same (place, ts, param).
 CREATE TABLE IF NOT EXISTS forecast (
     place text NOT NULL,
     ts timestamptz NOT NULL,
