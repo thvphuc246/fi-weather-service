@@ -4,3 +4,9 @@ __pycache__/
 .pytest_cache/
 .vercel/
 .env*
+.idea
+.agents
+.claude
+/AGENTS.md
+/CLAUDE.md
+/skills-lock.json
