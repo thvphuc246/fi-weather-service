@@ -10,6 +10,6 @@ jobs:
     if: ${{ vars.FETCH_ENABLED == 'true' }}
     steps:
       - run: >
-          curl --fail-with-body --silent --show-error --max-time 290
+          curl --fail --output /dev/null --silent --show-error --max-time 290
           -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
           "${{ secrets.FETCH_URL }}"

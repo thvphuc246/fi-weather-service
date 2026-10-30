@@ -29,7 +29,11 @@ def starts(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[datetime]]:
         return fmi.parse((FIXTURES / "observations.xml").read_bytes(), fmi.OBSERVATION_PARAMS)
 
     def fake_forecast(place: str) -> list[fmi.Reading]:
-        return fmi.parse((FIXTURES / "forecast.xml").read_bytes(), fmi.FORECAST_PARAMS)
+        readings = fmi.parse((FIXTURES / "forecast.xml").read_bytes(), fmi.FORECAST_PARAMS)
+        first = min(r.ts for r in readings)
+        start = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        offset = start - first
+        return [r._replace(ts=r.ts + offset) for r in readings]
 
     monkeypatch.setattr(fmi, "fetch_observations", fake_obs)
     monkeypatch.setattr(fmi, "fetch_forecast", fake_forecast)
@@ -90,7 +94,11 @@ def test_series(starts: list[datetime]) -> None:
         db.upsert(conn, "observation", "Oulu", [fmi.Reading(now - timedelta(hours=2), "temperature", -3.5)])
         db.upsert(conn, "forecast", "Oulu", [fmi.Reading(now + timedelta(hours=2), "temperature", -4.0)])
     client = TestClient(app)
-    data = client.get("/api/series", params={"place": "Oulu", "hours": 24}).json()
+    resp = client.get("/api/series", params={"place": "Oulu", "hours": 24})
+    data = resp.json()
+    assert resp.headers["cache-control"] == "public, s-maxage=300"
     assert [p[1] for p in data["observation"]["temperature"]] == [-3.5]
     assert [p[1] for p in data["forecast"]["temperature"]] == [-4.0]
-    assert client.get("/api/series", params={"place": "Nowhere"}).status_code == 404
+    missing = client.get("/api/series", params={"place": "Nowhere"})
+    assert missing.status_code == 404
+    assert "cache-control" not in missing.headers

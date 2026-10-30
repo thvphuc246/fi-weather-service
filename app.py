@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
 from weather import db
@@ -51,9 +51,10 @@ def places() -> tuple[str, ...]:
 
 
 @app.get("/api/series")
-def series(place: str, hours: Annotated[int, Query(ge=1, le=720)] = 24) -> dict[str, db.Series]:
+def series(response: Response, place: str, hours: Annotated[int, Query(ge=1, le=720)] = 24) -> dict[str, db.Series]:
     if place not in PLACES:
         raise HTTPException(404, f"unknown place {place!r}")
+    response.headers["Cache-Control"] = "public, s-maxage=300"
     with db.connect() as conn:
         return db.series(conn, place, hours)
 
