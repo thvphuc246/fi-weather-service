@@ -60,9 +60,12 @@ def series(response: Response, place: str, hours: Annotated[int, Query(ge=1, le=
 
 
 @app.get("/api/fetch")
-def fetch(authorization: Annotated[str | None, Header()] = None) -> dict[str, str]:
+def fetch(response: Response, authorization: Annotated[str | None, Header()] = None) -> dict[str, str]:
     secret = os.environ.get("CRON_SECRET")
     given = (authorization or "").encode()
     if not secret or not hmac.compare_digest(given, f"Bearer {secret}".encode()):
         raise HTTPException(401)
-    return run_fetch()
+    results = run_fetch()
+    if any(r.startswith("error") for r in results.values()):
+        response.status_code = 502
+    return results

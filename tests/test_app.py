@@ -88,6 +88,21 @@ def test_one_failing_place_does_not_stop_others(starts: list[datetime], monkeypa
     assert results["Oulu"].startswith("ok")
 
 
+def test_fetch_returns_502_when_a_place_fails(starts: list[datetime], monkeypatch: pytest.MonkeyPatch) -> None:
+    real = fmi.fetch_forecast
+
+    def flaky(place: str) -> list[fmi.Reading]:
+        if place == "Espoo":
+            raise OSError("FMI down")
+        return real(place)
+
+    monkeypatch.setattr(fmi, "fetch_forecast", flaky)
+    resp = TestClient(app).get("/api/fetch", headers=AUTH)
+    assert resp.status_code == 502
+    assert resp.json()["Espoo"].startswith("error")
+    assert resp.json()["Oulu"].startswith("ok")
+
+
 def test_series(starts: list[datetime]) -> None:
     now = datetime.now(UTC)
     with db.connect() as conn:
