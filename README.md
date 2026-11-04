@@ -28,8 +28,25 @@ DB tests are skipped without `TEST_DATABASE_URL`. They truncate tables, so never
 
 ## Production (Vercel + Neon)
 
-1. `vercel link`, `vercel integration add neon` (sets `DATABASE_URL`), `vercel env add CRON_SECRET production`.
-2. Deploy (Git push, or `vercel deploy --prod`).
-3. GitHub repo settings: secrets `FETCH_URL` (`https://<app>.vercel.app/api/fetch`) and `CRON_SECRET`; variable `FETCH_ENABLED=true`.
+`master` is the source of truth and never deploys. `prod` is what's live.
 
-`.github/workflows/fetch.yml` then calls `/api/fetch` every 30 minutes (Vercel Hobby cron only runs daily). GitHub pauses scheduled workflows after 60 days without commits – re-enable from the Actions tab.
+### Deploying
+
+Actions → **Promote** → Run workflow on `master`. It runs the checks, fast-forwards `prod` to that commit, then runs `vercel deploy --prod`. Nothing else deploys: Git deploys are off in `vercel.json`.
+
+### Rollback
+
+Vercel dashboard → Deployments → Instant Rollback, then revert on `master` and Promote again.
+
+### Scheduled fetch
+
+cron-job.org calls `GET /api/fetch` every 30 minutes with `Authorization: Bearer $CRON_SECRET`. A 502 means at least one place failed, and the body says which.
+
+### One-time setup
+
+1. `vercel link`. Don't connect the Git repo.
+2. `vercel integration add neon`, choosing region `aws-eu-central-1`. It sets `DATABASE_URL`.
+3. `vercel env add CRON_SECRET production`.
+4. GitHub secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`. The two IDs are in `.vercel/project.json`.
+5. Branch protection on `master` and `prod`: required check `check`, no deletion, no force pushes.
+6. A cron-job.org job: every 30 min, with the Bearer header, and an email after 3 failures in a row.
